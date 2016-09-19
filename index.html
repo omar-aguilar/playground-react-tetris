@@ -59,28 +59,61 @@
       ];
 
 
+      var getPiece = function() {
+        var idx = Math.floor(Math.random() * shapes.length);
+        return shapes[idx];
+      }
+      var queue_length = 5;
+      var piece_queue = [];
+      for (var i = 0 ; i < queue_length ; ++i) {
+        piece_queue.push(getPiece());
+      }
 
       var Shape = React.createClass({
+        getInitialState: function() {
+          return {
+            data: this.props.data,
+            style: {
+              width: this.props.data.blockSize,
+              height: this.props.data.blockSize
+            }
+          }
+        }, 
         render: function() {
-          var data = this.props.data;
-          var style = {
-            width: data.blockSize,
-            height: data.blockSize
-          };
+          var data = this.state.data;
+          var style = this.state.style;
           return <div className="shape"> {
             Array.apply(null, data.shape).map(function(row, i) {
               return <div className="shape-row" key={"shape-row-"+i}> {
                 Array.apply(null, row).map(function(d, j) {
                   var className = data.shape[i][j] === 1
                         ? "shape-block-fill " + data.id
-                        : "shape-block-empty";
+                        : "shape-block-white";
 
-                  return <div key={"z-"+ i + "-" + j} className={className}
+                  return <div key={data.id + "-"+ i + "-" + j} className={className}
                     style={style} />
                 })                
               } </div>
             })
           } </div>
+        }
+      })
+
+      var Score = React.createClass({
+        plusScore: function(rowCount) {
+          this.setState({
+            score: this.state.score + rowCount
+          });
+        },
+        getInitialState: function() {
+          return {
+            score: 0
+          }
+        },
+        render: function() {
+          return <div className="score">
+            Score: { this.state.score }
+            </div>
         }
       })
 
@@ -138,6 +171,7 @@
                 })
             });
           return <div id="main-board">
+            <Score key="score" ref="score"/>
             <div id="grid">
             {
               cellData.map(function(rowData, idx) {
@@ -156,14 +190,14 @@
             </div>
             <div id="piece-queue">
             {
-              shapes.map(function(s,idx) {
+              piece_queue.map(function(s,idx) {
                 var d = {
                   shape: s.shape,
                   blockSize: data.blockSize,
                   color: s.color,
                   id: s.id
                 }
-                return <Shape data={d} key={"shape-"+idx} />
+                return <Shape data={d} key={"shape-"+idx} ref={"shape-"+idx}/>
               })
             }
             </div>
@@ -176,6 +210,263 @@
         document.getElementById("app")
       );
 
+
+
+      var nextPieceIdx = 0;
+      var curr_shape = getPiece();
+      var timeout = null;
+      var game = {
+        paused: false,
+        gameover: false,
+        speed: 1000, //move each this amount of milliseconds
+        score: 0,
+        piece: {
+          shape: curr_shape.shape,
+          id: curr_shape.id,
+          curr_coord: {x: -1, y: -1}
+        }
+      };
+
+
+
+      var pulse = function(piece, fix) {
+        var shape = piece.shape;
+        var coord = piece.curr_coord;
+
+        //clear previous move
+        var ny = board.props.verticalBlocks;
+        var nx = board.props.horizontalBlocks;
+        for (var i = 0 ; i < ny ; ++i) {
+          for (var j = 0 ; j < nx ; ++j) {
+              var cellName = "cell-" + i + "-" + j;
+              var currCell = board.refs[cellName]
+              if (currCell && !currCell.state.fix) {
+                currCell._setState({active:false});
+              }
+          }
+        }
+
+        //Count full rows
+        var rowCount = 0;
+        for (var i = ny-1 ; i >= 0 ; --i) {
+          var fixedCells = 0;
+          for (var j = nx-1 ; j >= 0 ; --j) {            
+            var cellName = "cell-" + i + "-" + j;
+            var currCell = board.refs[cellName]
+            if (currCell && currCell.state.fix) {
+              ++fixedCells;
+            }
+          }
+          if (fixedCells === nx) {
+            ++rowCount;
+          }
+        }
+        if (rowCount > 0) {
+          //update score
+          board.refs.score.plusScore(rowCount);
+          //update board, so remove full lines
+          for (var i = ny - 1 - rowCount ; i >= 0 ; --i) {
+            for (var j = nx - 1 ; j >= 0 ; --j) {  
+                var cellName = "cell-" + i + "-" + j;
+                var currCell = board.refs[cellName];
+                var newProps = {
+                  active: currCell.state.active, 
+                  pieceId: currCell.state.pieceId,
+                  fix: currCell.state.fix,
+                  className: currCell.state.className
+                };
+                cellName = "cell-" + (i + rowCount) + "-" + j;
+                board.refs[cellName]._setState(newProps);
+            }
+          }
+        }
+
+        //fix piece if needed, otherwise just draw the piece
+        shape.forEach(function(row, i) {
+          row.forEach(function(val, j) {
+            var cellName = 
+              "cell-" + (coord.y + i) + "-" + (coord.x + j);
+            if (board.refs[cellName] && val === 1){
+              var newProps = {
+                active:true, 
+                pieceId: piece.id
+              };
+              if (fix) {
+                newProps.fix = true;
+              }
+              board.refs[cellName]._setState(newProps);              
+            }
+          })
+        });
+      }
+
+      var collide = function(next_coord) {
+        var piece = game.piece;
+        var shape = piece.shape;
+        var ysize = board.props.verticalBlocks - 1;
+        var xsize = board.props.horizontalBlocks - 1;
+        var ny = shape.length, nx = shape[0].length;
+        for (var i = 0 ; i < ny ; ++i) {
+          for (var j = 0 ; j < nx ; ++j) {
+            if (shape[i][j] === 0) {
+              continue;
+            }
+            var abs_y = next_coord.y + i;
+            var abs_x = next_coord.x + j;
+            if (abs_x > xsize || abs_x < 0) {
+              console.log("out of board left or right");
+              return true;
+            }
+            if (abs_y > ysize) {
+              console.log("out of board bottom");
+              return true;
+            }
+            var cellName = "cell-" + abs_y + "-" + abs_x;
+            var currCell = board.refs[cellName]
+            if (currCell && currCell.state.fix) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      var moveOn = function() {
+        var piece = game.piece;
+        var shape = piece.shape;
+        var coord = piece.curr_coord;
+        var nrows = shape.length;
+        var ncols = shape[0].length;
+
+        //if new piece
+        if (coord.x === -1 || coord.y === -1) {
+          //update UI queue
+          for (var i = 0 ; i < queue_length ; ++i) {
+            var shapeRef = "shape-" + i;
+            board.refs[shapeRef].setState({
+              data: piece_queue[i]
+            })
+          }
+
+          var board_w = board.props.horizontalBlocks;
+          var x = board_w/2 - Math.floor(ncols/2);
+          coord.x = parseInt(x, 10);
+          coord.y = 0;
+          if (collide(coord)) {
+            console.log("game over");
+            game.gameover = true;
+          }
+          pulse(piece);          
+          return;
+        }
+
+        var next_coord = {
+          x: coord.x,
+          y: coord.y + 1
+        };
+
+        //if not collide, update
+        if (!collide(next_coord)) {
+          coord.y = next_coord.y;
+          pulse(piece);
+        } else {
+          pulse(piece, true);
+          coord.x = -1;
+          coord.y = -1;
+          ++nextPieceIdx;
+          var shape = piece_queue.shift();
+          game.piece.shape = shape.shape;
+          game.piece.id = shape.id;
+          piece_queue.push(getPiece());
+        }
+      }
+
+      var detectKeyPress = function(evt) {
+        var piece = game.piece;
+        var coord = piece.curr_coord;
+        //if no current piece, ignore
+        if (coord.x == -1 || coord.y == -1) {
+          return;
+        }
+        evt = evt || window.event;
+        //console.log(evt.keyCode, evt.code);
+        var key = evt.keyCode;
+
+        var next_coord = {
+          x: coord.x,
+          y: coord.y
+        };
+
+        if (key === 80) { //p > PAUSE
+          game.paused = !game.paused;
+          if (game.paused) {
+            clearTimeout(timeout);
+            console.log("PAUSE");
+          } else {
+            console.log("UNPAUSE");
+            gameOn();
+          }
+        }
+        if (game.paused) {
+          return;
+        }
+
+        switch(key) {
+          case 37: //Arrow Left > MOVE LEFT
+              next_coord.x--;
+              if (!collide(next_coord)) {
+                coord.x = next_coord.x;
+                pulse(piece);
+              }
+            break; 
+          case 38: //Arrow Up > ROTATE
+            var shape = piece.shape;
+            var rows = shape.length;
+            var cols = shape[0].length;
+            //rotate :)
+            var rotatedShape = 
+              Array.apply(null, Array(cols)).map(function(_, j) {
+                return Array.apply(null, Array(rows)).map(function(_, i) {
+                  return shape[rows - i - 1][j];
+                });
+              });
+            if (next_coord.x + rotatedShape[0].length - 1 >= board.props.horizontalBlocks) {
+              next_coord.x-= rotatedShape[0].length - (board.props.horizontalBlocks - next_coord.x);
+            }            
+            game.piece.shape = rotatedShape;
+            if (!collide(next_coord)) {
+              coord.x = next_coord.x;
+              pulse(piece);
+            } else {
+              game.piece.shape = shape;
+            }            
+            break;
+          case 39: //Arrow Right > MOVE RIGHT
+              next_coord.x++;
+              if (!collide(next_coord)) {
+                coord.x = next_coord.x;
+                pulse(piece);
+              }
+            break;
+          case 40: //Arrow Down > FAST DOWN
+              clearTimeout(timeout);
+              gameOn();
+            break;
+        }        
+      }
+
+      //detect keys 
+      document.addEventListener("keyup", detectKeyPress);
+      var gameOn = function() {
+        moveOn();
+        if (!game.gameover && !game.paused) {
+          timeout = setTimeout(gameOn, game.speed);
+        }
+      }
+      gameOn();
+
+
+/*
 
 
       var nextPiece = 0;
@@ -254,7 +545,7 @@
         var shape = piece.shape;
         var nrows = shape.length;
         var ncols = shape[0].length;
-        if (last_coord.x === -1 || last_coord.y === -1) { //first draw
+        if (last_coord.x === -1 || last_coord.y === -1) { //new piece
           var board_w = board.props.horizontalBlocks;
           var x = board_w/2 - Math.floor(ncols/2);
           last_coord.x = parseInt(x, 10);
@@ -392,7 +683,7 @@
         }
       }
       gameOn();
-
+*/
     </script>
   </body>
 </html>

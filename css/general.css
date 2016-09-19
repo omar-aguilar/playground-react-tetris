@@ -7,6 +7,7 @@
 #grid {
     float:left;
 }
+
 #piece-queue {
     float:left;
     margin-left: 20px;
@@ -25,6 +26,12 @@
 
 .shape-block-fill {
     border: 2px solid gray;
+    float: left;
+    margin: 1px;
+}
+
+.shape-block-white {
+    border: 2px solid transparent;
     float: left;
     margin: 1px;
 }
@@ -56,4 +63,8 @@
     float: left;
     margin: 1px;
     background-color: lightcoral;
+}
+
+.shape {
+    margin-bottom: 20px;
 }
