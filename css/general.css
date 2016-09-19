@@ -1,0 +1,59 @@
+#main-board {
+    width: 50%;
+    margin: 0 auto;
+    margin-top: 50px;
+}
+
+#grid {
+    float:left;
+}
+#piece-queue {
+    float:left;
+    margin-left: 20px;
+}
+
+.grid-row, .shape-row {
+    overflow: hidden;
+}
+
+.grid-cell, .shape-block-empty {
+    border: 2px solid gray;
+    float: left;
+    margin: 1px;
+    background-color: #E0E0E0;
+}
+
+.shape-block-fill {
+    border: 2px solid gray;
+    float: left;
+    margin: 1px;
+}
+
+.O {
+    background-color: lightgreen;
+}
+.J {
+    background-color: lightblue;
+}
+.L {
+    background-color: cornflowerblue;
+}
+.T {
+    background-color: orchid;
+}
+.I {
+    background-color: sandybrown;
+}
+.Z {
+    background-color: lightcoral;
+}
+.S {
+    background-color: lightpink;
+}
+
+.grid-cell-active {
+    border: 2px solid gray;
+    float: left;
+    margin: 1px;
+    background-color: lightcoral;
+}

@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Tetris</title>
+    <meta charset="utf-8">
+  </head>
+  <body>
+    <div id="app"></div>
+    <link rel="stylesheet" href="css/general.css">
+    <script src="js/react/react.js"></script>
+    <script src="js/react/react-dom.js"></script>
+    <script src="js/react/browser.min.js"></script>
+
+    <script type="text/babel">
+
+      var shapes = [
+        {
+          id: "I",
+          shape: [
+            [1, 1, 1, 1]
+          ]
+        }, {
+          id: "J",
+          shape: [
+            [1, 0, 0],
+            [1, 1, 1]
+          ]
+        }, {
+          id: "L",
+          shape: [ 
+            [0, 0, 1],
+            [1, 1, 1]
+          ]
+        }, {
+          id: "O",
+          shape: [
+            [1, 1],
+            [1, 1]
+          ]
+        }, {
+          id: "S",
+          shape: [
+            [0, 1, 1],
+            [1, 1, 0]
+          ]
+        }, {
+          id: "Z",
+          shape: [
+            [1, 1, 0],
+            [0, 1, 1]
+          ]
+        }, {
+          id: "T",
+          shape: [
+            [1, 1, 1],
+            [0, 1, 0]
+          ]
+        }
+      ];
+
+
+
+      var Shape = React.createClass({
+        render: function() {
+          var data = this.props.data;
+          var style = {
+            width: data.blockSize,
+            height: data.blockSize
+          };
+          return <div className="shape"> {
+            Array.apply(null, data.shape).map(function(row, i) {
+              return <div className="shape-row" key={"shape-row-"+i}> {
+                Array.apply(null, row).map(function(d, j) {
+                  var className = data.shape[i][j] === 1
+                        ? "shape-block-fill " + data.id
+                        : "shape-block-empty";
+
+                  return <div key={"z-"+ i + "-" + j} className={className}
+                    style={style} />
+                })                
+              } </div>
+            })
+          } </div>
+        }
+      })
+
+      var Cell = React.createClass({
+        _setState: function(props) {
+          var newClassName = "grid-cell";
+          if (props.active) {
+            newClassName = "shape-block-fill " + props.pieceId;
+          }
+          props.className = newClassName;
+          this.setState(props);
+        },
+        getInitialState: function() {
+          return {
+            active: false,
+            className: "grid-cell",
+            fix: false
+          }
+        },
+        render: function() {
+          var data = this.props.data;
+          var style = {
+              width: data.blockSize,
+              height: data.blockSize
+          };
+          return <div 
+            className={this.state.className} 
+            style={style}> 
+            { this.state.fix ? "0" : "1"}
+            </div>
+        }
+      })
+      // var CellFactory = React.createFactory(Cell);
+
+      var Board = React.createClass({
+        getDefaultProps: function() {
+          return {
+            horizontalBlocks : 10,
+            verticalBlocks : 10,
+            blockSize: 30,
+          }
+        },
+        render: function() {
+          var data = this.props;
+          var cellData = Array.apply(null, Array(data.verticalBlocks))
+            .map(function(_,i) {
+              return Array.apply(null, Array(data.horizontalBlocks))
+                .map(function(_,j){
+                  return {
+                    blockSize: data.blockSize,
+                    x: i,
+                    y: j,
+                    key: "cell-" + i + "-" + j
+                  }
+                })
+            });
+          return <div id="main-board">
+            <div id="grid">
+            {
+              cellData.map(function(rowData, idx) {
+                return (
+                  //TODO set minWidth
+                  <div className="grid-row" key={"grid-row-"+idx}>                    
+                    {
+                      rowData.map(function(d) {
+                        return (<Cell data={d} key={d.key} ref={d.key} />);
+                      })
+                    }
+                  </div>
+                )
+              })
+            }
+            </div>
+            <div id="piece-queue">
+            {
+              shapes.map(function(s,idx) {
+                var d = {
+                  shape: s.shape,
+                  blockSize: data.blockSize,
+                  color: s.color,
+                  id: s.id
+                }
+                return <Shape data={d} key={"shape-"+idx} />
+              })
+            }
+            </div>
+          </div>
+        } //render end
+      });
+
+      var board = ReactDOM.render(
+        <Board/>,
+        document.getElementById("app")
+      );
+
+
+
+      var nextPiece = 0;
+      var currShape = shapes[nextPiece];
+      var last_coord = {x: -1, y: -1};
+      var timeout = null;
+      var pause = false;
+      var gameover = false;
+
+
+      var pulse = function(piece, options) {
+        var shape = piece.shape;
+        var last_coord = options.last_coord || null;
+        var clear = options.clear || false;
+        var fix = options.fix || false;
+
+        if (clear) {
+          var ny = board.props.verticalBlocks;
+          var nx = board.props.horizontalBlocks;
+          for (var i = 0 ; i <= ny ; ++i) {
+            for (var j = 0 ; j < nx ; ++j) {
+                var cellName = 
+                  "cell-" + i + "-" + j;
+                var currCell = board.refs[cellName]
+                if (board.refs[cellName] && !currCell.state.fix) {
+                  currCell._setState({active:false});
+                }
+            }
+          }
+          return;
+        }
+
+        shape.forEach(function(row, i) {
+          row.forEach(function(val, j) {
+            var cellName = 
+              "cell-" + (last_coord.y + i) + "-" + (last_coord.x + j);
+            if (board.refs[cellName] && val === 1){
+              var newProps = {
+                active:true, 
+                pieceId: piece.id
+              };
+              if (fix) {
+                newProps.fix = true;
+              }
+              board.refs[cellName]._setState(newProps);              
+            }
+          })
+        });
+      }
+
+      var checkCollisions = function(shape, new_coord) {
+        var xsize = board.props.horizontalBlocks - 1;
+        var ysize = board.props.verticalBlocks - 1;
+        var ny = shape.length, nx = shape[0].length;
+        for (var i = 0 ; i < ny ; ++i) {
+          for (var j = 0 ; j < nx ; ++j) {
+            if (shape[i][j] === 0) {
+              continue;
+            }
+            var abs_y = new_coord.y + i;
+            var abs_x = new_coord.x + j;
+            if (abs_y > ysize) {
+              return 3;
+            }
+            var cellName = "cell-" + abs_y + "-" + abs_x;
+            var currCell = board.refs[cellName]
+            if (board.refs[cellName] && currCell.state.fix) {
+              return 2;
+            }
+          }
+        }
+        return 1;
+      }
+
+      var moveOn = function(piece, last_coord) {
+        var shape = piece.shape;
+        var nrows = shape.length;
+        var ncols = shape[0].length;
+        if (last_coord.x === -1 || last_coord.y === -1) { //first draw
+          var board_w = board.props.horizontalBlocks;
+          var x = board_w/2 - Math.floor(ncols/2);
+          last_coord.x = parseInt(x, 10);
+          last_coord.y = 0 ;        
+        } else {
+          last_coord.y += 1;
+        }
+      }
+
+      var drawOnBoard = function(piece, last_coord) {
+        var shape = piece.shape;
+        //check collisions
+        var state = checkCollisions(shape, last_coord);
+        //console.log(state, last_coord);
+        switch(state) {
+          case 1: //move on
+            var lc = {
+              x: last_coord.x,
+              y: last_coord.y - 1
+            };
+            pulse(piece, {last_coord: lc, clear: true});//clear previous
+            pulse(piece, {last_coord: last_coord});
+          break;
+          case 3: case 2: //2 > clash with fixed piece, 3 > out of grid
+            var lc = {
+              x: last_coord.x,
+              y: last_coord.y - 1
+            };
+
+            if (lc.y == -1) {
+              console.log("LOSE");
+              gameover = true;
+              return;
+            }
+
+            pulse(piece, {last_coord: lc, fix: true}); //fix where it is
+
+            //TODO if state is equal 3 then accelerate appearance piece
+            last_coord.x = -1;
+            last_coord.y = -1;
+            ++nextPiece
+            currShape = shapes[nextPiece%shapes.length];
+
+          break;
+        } 
+      }
+
+
+      var detectKeyPress = function(evt, p2) {
+        //if no current piece, ignore
+        if (last_coord.x == -1 || last_coord.y == -1) {
+          return;
+        }
+        evt = evt || window.event;
+        //console.log(evt.keyCode, evt.code);
+        var key = evt.keyCode;
+        switch(key) {
+          case 37: //Arrow Left > MOVE LEFT
+            var newX = Math.max(0, last_coord.x - 1);
+            var lc = {
+              x: newX,
+              y: last_coord.y
+            };
+            //if new coordinate is ok, then move left
+            if (checkCollisions(currShape.shape, lc) === 1) {
+              last_coord.x = newX;
+            }
+            break; 
+          case 38: //Arrow Up > ROTATE
+            console.log("ROTATE");
+            var shape = currShape.shape;
+            var rows = shape.length;
+            var cols = shape[0].length;
+            //rotate :)
+            var rotatedShape = 
+            Array.apply(null, Array(cols)).map(function(_, j) {
+              return Array.apply(null, Array(rows)).map(function(_, i) {
+                return shape[rows - i - 1][j];
+              });
+            });
+
+            //when rotate check that doesn't out the grid
+
+            //if rotated shape collides ignore order
+            if (checkCollisions(rotatedShape, last_coord) !== 1) {
+              console.log("INVALIDATE");
+              return;
+            }
+            currShape.shape = rotatedShape;
+            if (last_coord.x + currShape.shape[0].length - 1 >= board.props.horizontalBlocks) {
+              last_coord.x-= currShape.shape[0].length - (board.props.horizontalBlocks - last_coord.x);
+            }
+            break;
+          case 39: //Arrow Right > MOVE RIGHT
+            var l = currShape.shape[0].length;
+            var xsize = board.props.horizontalBlocks;
+            if (last_coord.x + l < xsize) {
+              var newX = last_coord.x+1;
+              var lc = {
+                x: newX,
+                y: last_coord.y
+              };
+              //if new coordinate is ok, then move right
+              if (checkCollisions(currShape.shape, lc) === 1) {
+                last_coord.x = newX;
+              }
+            }            
+            break;
+          case 40: //Arrow Down > FAST DOWN
+            last_coord.y++;
+            break;
+          case 80: //p > PAUSE
+            pause = !pause;
+            if (pause && timeout != null) {
+              console.log("PAUSE");
+              clearTimeout(timeout); 
+              timeout = null;
+            } else {
+              console.log("UNPAUSE");
+              gameOn();
+            }
+            return; //yes should be a return not a break
+        }
+        drawOnBoard(currShape, last_coord);
+      }
+
+      //detect keys 
+      document.addEventListener("keyup", detectKeyPress);
+
+      function gameOn() {
+        moveOn(currShape, last_coord);
+        drawOnBoard(currShape, last_coord);
+        if (!gameover) {
+          timeout = setTimeout(gameOn, 3000);
+        }
+      }
+      gameOn();
+
+    </script>
+  </body>
+</html>
