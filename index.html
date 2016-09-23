@@ -3,6 +3,7 @@
   <head>
     <title>Tetris</title>
     <meta charset="utf-8">
+    <link href="https://fonts.googleapis.com/css?family=Ubuntu+Mono" rel="stylesheet">
   </head>
   <body>
     <div id="app"></div>
@@ -96,6 +97,25 @@
         piece_queue.push(getPiece());
       }
 
+      var GameInfo = React.createClass({
+        getInitialState: function() {
+          return {
+            data: this.props.data,
+            hide: this.props.hide
+          };
+        },
+        render: function() {
+          var data = this.props.data;
+          var className = "inner-game-status " + data.className;
+          if (this.props.hide) {
+            className += " hidden";
+          }
+          return <div className="outer-game-status">
+            <div className={className}>{data.text}</div>
+          </div>
+        }
+      });
+
       var Shape = React.createClass({
         getInitialState: function() {
           return {
@@ -126,20 +146,20 @@
         }
       })
 
-      var Score = React.createClass({
-        plusScore: function(rowCount) {
+      var Counter = React.createClass({
+        plusCounter: function(rowCount) {
           this.setState({
-            score: this.state.score + rowCount
+            count: this.state.count + rowCount
           });
         },
         getInitialState: function() {
           return {
-            score: 0
+            count: 0
           }
         },
         render: function() {
-          return <div className="score">
-            Score: { this.state.score }
+          return <div className="counter">
+            {this.props.text}: { this.state.count }
             </div>
         }
       })
@@ -175,6 +195,23 @@
       })
 
       var Board = React.createClass({
+        componentDidMount: function() {
+          //ugly hack to fix the min width
+          var gw = document.getElementById("grid").clientWidth;
+          var giw = document.getElementById("game-info").clientWidth;
+          this.setState({
+            style: {
+              minWidth: gw + giw + 10,
+              width: gw + giw + 10,
+            }
+          })
+        },
+        getInitialState: function() {
+          return {
+            gamestatus: "start",
+            running: false
+          };
+        },
         getDefaultProps: function() {
           return {
             horizontalBlocks : 10,
@@ -196,8 +233,23 @@
                   }
                 })
             });
-          return <div id="main-board">
-            <Score key="score" ref="score"/>
+
+          var gameInfo = {
+            gamestart: {
+              text: "Press Enter to Start :)",
+              className: "gamestart-text"
+            },
+            gameover: {
+              text: "Game Over :(",
+              subtext: "Press Enter to Restart",
+              className: "gameover-text"
+            }
+          };
+
+          return <div id="main-board" style={this.state.style}>
+            <GameInfo 
+              data={this.state.gamestatus === 'start' ? gameInfo.gamestart : gameInfo.gameover} 
+              key="game-info" hide={this.state.running} />
             <div id="grid">
             {
               cellData.map(function(rowData, idx) {
@@ -214,18 +266,23 @@
               })
             }
             </div>
-            <div id="piece-queue">
-            {
-              piece_queue.map(function(s,idx) {
-                var d = {
-                  shape: s.shape,
-                  blockSize: data.blockSize,
-                  color: s.color,
-                  id: s.id
+            <div id="game-info">
+              <div id="piece-queue">
+                <Counter key="level" ref="level" text="Level"/>
+                <Counter key="score" ref="score" text="Score"/>
+                <div>Next:</div>
+                {
+                  piece_queue.map(function(s,idx) {
+                    var d = {
+                      shape: s.shape,
+                      blockSize: data.blockSize,
+                      color: s.color,
+                      id: s.id
+                    }
+                    return <Shape data={d} key={"shape-"+idx} ref={"shape-"+idx}/>
+                  })
                 }
-                return <Shape data={d} key={"shape-"+idx} ref={"shape-"+idx}/>
-              })
-            }
+              </div>
             </div>
           </div>
         } //render end
@@ -240,9 +297,12 @@
       var curr_shape = getPiece();
       var timeout = null;
       var game = {
+        running: false,
         paused: false,
         gameover: false,
         speed: 1000, //move each this amount of milliseconds
+        speedIncrement: 20, //increase the speed, so to reduce this amount of milliseconds each rowsPerlevel
+        rowsPerlevel: 20, //how many rows increase the level
         score: 0,
         piece: {
           shape: curr_shape.shape,
@@ -251,6 +311,19 @@
         }
       };
 
+
+      //start game
+      var gameOn = function() {
+        moveOn();
+        if (!game.gameover && !game.paused) {
+          timeout = setTimeout(gameOn, game.speed);
+        }
+      }
+
+      var startGame = function() {
+        board.setState({running:true});
+        gameOn();
+      }
 
 
       var pulse = function(piece, fix) {
@@ -275,7 +348,14 @@
           }
           //check if we have to increase the score
           if (fixedCells === nx) {
-            board.refs.score.plusScore(1);
+            board.refs.score.plusCounter(1);
+            game.score++;
+            
+            if (game.score%game.rowsPerlevel === 0) {
+              game.speed= Math.max(50, game.speed-game.speedIncrement);
+              board.refs.level.plusCounter(1);
+            }
+
             //clear row and copy format from top rows
             for (var y = i ; y > 0 ; --y) {
               for (var x = 0 ; x < nx ; ++x) {
@@ -370,7 +450,9 @@
           coord.y = 0;
           if (collide(coord)) {
             console.log("game over");
+            board.setState({gamestatus:"end", running: false});
             game.gameover = true;
+            game.running= false;
           }
           pulse(piece);          
           return;
@@ -400,18 +482,26 @@
       var detectKeyPress = function(evt) {
         var piece = game.piece;
         var coord = piece.curr_coord;
+
+        evt = evt || window.event;
+        var key = evt.keyCode;
+        if (key === 13) {
+          if (!game.running) {
+            game.running = !game.running;
+            startGame();
+          }
+        }
+
         //if no current piece, ignore
         if (coord.x == -1 || coord.y == -1) {
           return;
         }
-        evt = evt || window.event;
-        var key = evt.keyCode;
 
         var next_coord = {
           x: coord.x,
           y: coord.y
         };
-
+ 
         if (key === 80) { //p > PAUSE
           game.paused = !game.paused;
           if (game.paused) {
@@ -472,16 +562,6 @@
 
       //detect keys 
       document.addEventListener("keyup", detectKeyPress);
-
-      //start game
-      var gameOn = function() {
-        moveOn();
-        if (!game.gameover && !game.paused) {
-          timeout = setTimeout(gameOn, game.speed);
-        }
-      }
-      gameOn();
-
     </script>
   </body>
 </html>

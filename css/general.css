@@ -1,14 +1,20 @@
+body {
+    font-family: 'Ubuntu Mono', cursive;
+    font-size: 2.5em;
+}
+
 #main-board {
     width: 50%;
     margin: 0 auto;
     margin-top: 50px;
+    overflow: hidden;
 }
 
-#grid {
+#grid, #game-info {
     float:left;
 }
 
-#piece-queue {
+#piece-queue, .next-piece-label {
     float:left;
     margin-left: 20px;
 }
@@ -23,13 +29,11 @@
     margin: 1px;
     background-color: #E0E0E0;
 }
-
 .shape-block-fill {
     border: 2px solid gray;
     float: left;
     margin: 1px;
 }
-
 .shape-block-white {
     border: 2px solid transparent;
     float: left;
@@ -37,34 +41,66 @@
 }
 
 .O {
-    background-color: lightgreen;
+    background-color: #aec7e8;
 }
 .J {
-    background-color: lightblue;
+    background-color: #ffbb78;
 }
 .L {
-    background-color: cornflowerblue;
+    background-color: #98df8a;
 }
 .T {
-    background-color: orchid;
+    background-color: #ff9896;
 }
 .I {
-    background-color: sandybrown;
+    background-color: #c5b0d5;
 }
 .Z {
-    background-color: lightcoral;
+    background-color: #c49c94;
 }
 .S {
-    background-color: lightpink;
+    background-color: #f7b6d2;
 }
 
 .grid-cell-active {
     border: 2px solid gray;
     float: left;
     margin: 1px;
-    background-color: lightcoral;
 }
 
-.shape {
+.shape, .counter {
     margin-bottom: 20px;
+}
+
+.outer-game-status {
+    position:absolute;
+    left: 50%;
+    top: 25%;
+}
+
+.inner-game-status {
+    padding: 25px 50px;
+    position: relative;
+    left:-50%;    
+}
+
+.gameover-text {
+    color: #212121;
+    font-weight: bold;
+    border-radius: 55px 55px;
+    opacity: 0.95;
+    background-color: #CD5C5C;
+    box-shadow: 0px 0px 100px #FF9999;
+    border: 2px solid #8B0000;
+}
+.gamestart-text {
+    color: #212121;
+    font-weight: bold;
+    border-radius: 55px 55px;
+    background-color: #BAD696;
+    box-shadow: 0px 0px 100px #BAD696;
+    border: 2px solid #74c476;
+}
+.hidden {
+    display:none;
 }
